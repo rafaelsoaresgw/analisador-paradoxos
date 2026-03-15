@@ -1,5 +1,5 @@
-﻿import spacy
-from parser_logico import extrair_estrutura, QuantificadorUniversal, QuantificadorNegacao, Fato, Predicado, Termo
+﻿from parser_logico import extrair_estrutura, QuantificadorUniversal, QuantificadorNegacao, QuantificadorExistencial, Fato, Predicado, Termo, Conjuncao, Disjuncao, Implicacao
+import spacy
 
 # Carrega o modelo de português
 nlp = spacy.load("pt_core_news_sm")
@@ -11,7 +11,6 @@ class MotorInferencia:
         self.regras_aplicadas = []
     
     def adicionar_premissa(self, premissa):
-        """Adiciona uma premissa (pode ser string ou objeto lógico)"""
         if isinstance(premissa, str):
             estrutura = extrair_estrutura(premissa)
             if estrutura:
@@ -23,206 +22,119 @@ class MotorInferencia:
             return True
     
     def adicionar_premissas(self, lista_premissas):
-        """Adiciona múltiplas premissas de uma vez"""
         for p in lista_premissas:
             self.adicionar_premissa(p)
     
     def modus_ponens(self, implicacao, fato):
-        """
-        Regra: Se temos (P → Q) e P, então Q
-        """
-        if not isinstance(implicacao, (QuantificadorUniversal, QuantificadorNegacao)):
-            return None
-        
-        if not isinstance(fato, Fato):
+        if not isinstance(implicacao, (QuantificadorUniversal, Implicacao)) or not isinstance(fato, Fato):
             return None
         
         if isinstance(implicacao, QuantificadorUniversal):
             condicao_nome = implicacao.condicao.nome
-            fato_nome = str(fato.predicado).split('(')[0]
+            fato_nome = fato.predicado.nome
             fato_arg = fato.sujeito
             
-            if condicao_nome == fato_nome or condicao_nome in str(fato.predicado):
+            if condicao_nome == fato_nome:
                 conclusao_nome = implicacao.propriedade.nome
-                conclusao = Fato(fato_arg, Predicado(conclusao_nome, fato_arg))
-                
-                self.regras_aplicadas.append(f"Modus Ponens: {implicacao} + {fato} → {conclusao}")
+                if isinstance(implicacao.propriedade, str) and conclusao_nome.startswith('¬'):
+                    conclusao_nome = conclusao_nome[1:]
+                    conclusao = Fato(fato_arg, Predicado(conclusao_nome, fato_arg), negado=True)
+                else:
+                    conclusao = Fato(fato_arg, Predicado(conclusao_nome, fato_arg))
                 return conclusao
         
+        elif isinstance(implicacao, Implicacao):
+            if str(implicacao.antecedente) == str(fato):
+                return implicacao.consequente
         return None
     
     def modus_tollens(self, implicacao, fato_negado):
-        """
-        Regra: Se temos (P → Q) e ¬Q, então ¬P
-        """
-        if not isinstance(implicacao, QuantificadorUniversal):
+        if not isinstance(implicacao, (QuantificadorUniversal, Implicacao)) or not isinstance(fato_negado, Fato) or not fato_negado.negado:
             return None
         
-        if not isinstance(fato_negado, QuantificadorNegacao) and not "¬" in str(fato_negado):
-            return None
+        if isinstance(implicacao, QuantificadorUniversal):
+            conclusao_nome = implicacao.propriedade.nome
+            fato_nome = fato_negado.predicado.nome
+            if conclusao_nome == fato_nome:
+                condicao_nome = implicacao.condicao.nome
+                argumento = fato_negado.sujeito
+                return Fato(argumento, Predicado(condicao_nome, argumento), negado=True)
         
-        # Implementação simplificada por enquanto
+        elif isinstance(implicacao, Implicacao):
+            if str(implicacao.consequente) == str(fato_negado):
+                if isinstance(implicacao.antecedente, Fato):
+                    return Fato(implicacao.antecedente.sujeito, implicacao.antecedente.predicado, negado=True)
         return None
     
     def silogismo_hipotetico(self, imp1, imp2):
-        """
-        Regra: Se P → Q e Q → R, então P → R
-        """
-        if not isinstance(imp1, QuantificadorUniversal) or not isinstance(imp2, QuantificadorUniversal):
+        if not isinstance(imp1, (QuantificadorUniversal, Implicacao)) or not isinstance(imp2, (QuantificadorUniversal, Implicacao)):
             return None
         
-        conclusao1 = imp1.propriedade.nome
-        premissa2 = imp2.condicao.nome
+        if isinstance(imp1, QuantificadorUniversal) and isinstance(imp2, QuantificadorUniversal):
+            if imp1.propriedade.nome == imp2.condicao.nome:
+                nova_condicao = Predicado(imp1.condicao.nome, Termo("x"))
+                nova_propriedade = Predicado(imp2.propriedade.nome, Termo("x"))
+                return QuantificadorUniversal("x", nova_condicao, nova_propriedade)
         
-        if conclusao1 == premissa2:
-            nova_condicao = Predicado(imp1.condicao.nome, Termo("x"))
-            nova_propriedade = Predicado(imp2.propriedade.nome, Termo("x"))
-            
-            nova_implicacao = QuantificadorUniversal("x", nova_condicao, nova_propriedade)
-            self.regras_aplicadas.append(f"Silogismo Hipotético: {imp1} + {imp2} → {nova_implicacao}")
-            return nova_implicacao
+        elif isinstance(imp1, Implicacao) and isinstance(imp2, Implicacao):
+            if str(imp1.consequente) == str(imp2.antecedente):
+                return Implicacao(imp1.antecedente, imp2.consequente)
+        return None
+    
+    def silogismo_categorico(self, premissa_universal, premissa_particular):
+        if isinstance(premissa_universal, QuantificadorNegacao) and isinstance(premissa_particular, Fato):
+            if premissa_universal.condicao.nome == premissa_particular.predicado.nome:
+                return Fato(premissa_particular.sujeito, Predicado(premissa_universal.propriedade.nome, premissa_particular.sujeito), negado=True)
         
+        if isinstance(premissa_universal, QuantificadorUniversal) and isinstance(premissa_particular, Fato):
+            if premissa_universal.condicao.nome == premissa_particular.predicado.nome:
+                return Fato(premissa_particular.sujeito, Predicado(premissa_universal.propriedade.nome, premissa_particular.sujeito))
+        return None
+    
+    def simplificacao_conjuncao(self, conjuncao):
+        if not isinstance(conjuncao, Conjuncao):
+            return None
+        conclusoes = []
+        if conjuncao.esquerda not in self.premissas:
+            conclusoes.append(conjuncao.esquerda)
+        if conjuncao.direita not in self.premissas:
+            conclusoes.append(conjuncao.direita)
+        return conclusoes if conclusoes else None
+    
+    def silogismo_disjuntivo(self, disjuncao, fato_negado):
+        if not isinstance(disjuncao, Disjuncao) or not isinstance(fato_negado, Fato) or not fato_negado.negado:
+            return None
+        if str(disjuncao.esquerda) == str(fato_negado):
+            return disjuncao.direita
+        elif str(disjuncao.direita) == str(fato_negado):
+            return disjuncao.esquerda
         return None
     
     def resolver(self):
-        """
-        Tenta deduzir novas conclusões a partir das premissas
-        """
         novas_conclusoes = []
-        
-        # Aplica Modus Ponens
         for p1 in self.premissas:
             for p2 in self.premissas:
                 if p1 != p2:
-                    resultado = self.modus_ponens(p1, p2)
-                    if resultado and not any(str(r) == str(resultado) for r in self.premissas + novas_conclusoes):
-                        novas_conclusoes.append(resultado)
-                    
-                    resultado = self.modus_ponens(p2, p1)
-                    if resultado and not any(str(r) == str(resultado) for r in self.premissas + novas_conclusoes):
-                        novas_conclusoes.append(resultado)
+                    for resultado in [self.modus_ponens(p1, p2), self.modus_tollens(p1, p2), 
+                                     self.silogismo_hipotetico(p1, p2), self.silogismo_categorico(p1, p2),
+                                     self.silogismo_disjuntivo(p1, p2)]:
+                        if resultado:
+                            if isinstance(resultado, list):
+                                for r in resultado:
+                                    if r and not any(str(ex) == str(r) for ex in self.premissas + novas_conclusoes):
+                                        novas_conclusoes.append(r)
+                            else:
+                                if resultado and not any(str(ex) == str(resultado) for ex in self.premissas + novas_conclusoes):
+                                    novas_conclusoes.append(resultado)
+            
+            resultado = self.simplificacao_conjuncao(p1)
+            if resultado:
+                for r in resultado:
+                    if r and not any(str(ex) == str(r) for ex in self.premissas + novas_conclusoes):
+                        novas_conclusoes.append(r)
         
-        # Aplica silogismo hipotético
-        for p1 in self.premissas:
-            for p2 in self.premissas:
-                if p1 != p2:
-                    resultado = self.silogismo_hipotetico(p1, p2)
-                    if resultado and not any(str(r) == str(resultado) for r in self.premissas + novas_conclusoes):
-                        novas_conclusoes.append(resultado)
-        
-        # Remove duplicatas antes de adicionar
         for nova in novas_conclusoes:
             if not any(str(p) == str(nova) for p in self.premissas):
                 self.premissas.append(nova)
                 self.conclusoes.append(nova)
-        
         return novas_conclusoes
-    
-    def provar(self, objetivo_str):
-        """
-        Tenta provar se um objetivo é consequência lógica das premissas
-        """
-        objetivo = extrair_estrutura(objetivo_str)
-        if not objetivo:
-            return False, "Não consegui entender o objetivo"
-        
-        print(f"\n🔍 Tentando provar: {objetivo}")
-        print("-" * 40)
-        
-        # Verifica se o objetivo já está nas premissas
-        for p in self.premissas:
-            if str(p) == str(objetivo):
-                return True, "Objetivo já é uma premissa!"
-        
-        # Tenta deduzir novas conclusões
-        passos = 0
-        while passos < 10:
-            novas = self.resolver()
-            if not novas:
-                break
-            
-            for nova in novas:
-                if str(nova) == str(objetivo):
-                    ultima_regra = self.regras_aplicadas[-1] if self.regras_aplicadas else "Desconhecida"
-                    return True, f"Provado em {passos + 1} passos!\nRegras aplicadas: {ultima_regra}"
-            passos += 1
-        
-        return False, "Não foi possível provar o objetivo"
-    
-    def mostrar_premissas(self):
-        """Mostra todas as premissas atuais"""
-        print("\n📚 PREMISSAS:")
-        for i, p in enumerate(self.premissas, 1):
-            print(f"  {i}. {p}")
-    
-    def mostrar_conclusoes(self):
-        """Mostra todas as conclusões deduzidas"""
-        if self.conclusoes:
-            # Remove duplicatas para exibição
-            unicas = []
-            for c in self.conclusoes:
-                if not any(str(u) == str(c) for u in unicas):
-                    unicas.append(c)
-            
-            print("\n💡 CONCLUSÕES DEDUZIDAS:")
-            for i, c in enumerate(unicas, 1):
-                print(f"  {i}. {c}")
-        else:
-            print("\n💡 Nenhuma conclusão deduzida ainda")
-    
-    def limpar(self):
-        """Limpa todas as premissas e conclusões"""
-        self.premissas = []
-        self.conclusoes = []
-        self.regras_aplicadas = []
-
-# ==============================
-# TESTE FINAL COM NEGAÇÃO
-# ==============================
-print("="*70)
-print(" 🧠 MOTOR DE INFERÊNCIA - COMPLETO ")
-print("="*70)
-
-# Teste 1: Silogismo clássico
-print("\n📌 TESTE 1: Silogismo clássico")
-motor = MotorInferencia()
-motor.adicionar_premissas([
-    "Todo homem é mortal",
-    "Sócrates é homem"
-])
-motor.mostrar_premissas()
-resultado, mensagem = motor.provar("Sócrates é mortal")
-print(f"\n📊 Resultado: {mensagem}")
-
-# Teste 2: Cadeia de inferência
-print("\n" + "-"*70)
-print("\n📌 TESTE 2: Cadeia de inferência")
-motor2 = MotorInferencia()
-motor2.adicionar_premissas([
-    "Todo homem é mortal",
-    "Todo mortal é vivo",
-    "Sócrates é homem"
-])
-motor2.mostrar_premissas()
-resultado, mensagem = motor2.provar("Sócrates é vivo")
-print(f"\n📊 Resultado: {mensagem}")
-motor2.mostrar_conclusoes()
-
-# Teste 3: Com negação (agora implementado!)
-print("\n" + "-"*70)
-print("\n📌 TESTE 3: Com negação")
-motor3 = MotorInferencia()
-motor3.adicionar_premissas([
-    "Nenhum homem é pássaro",
-    "Sócrates é homem"
-])
-motor3.mostrar_premissas()
-
-# Por enquanto, mostramos que a estrutura de negação foi reconhecida
-print("\n✅ O parser reconheceu a negação corretamente!")
-print("   Próximo passo: implementar regras de inferência com negação")
-
-print("\n" + "="*70)
-print("✅ Motor de inferência completo!")
-print("📁 Arquivo: motor_inferencia.py")
-print("="*70)

@@ -1,113 +1,13 @@
 ﻿from flask import Flask, render_template, request, jsonify
 import spacy
 from parser_logico import extrair_estrutura, QuantificadorUniversal, QuantificadorNegacao, Fato, Predicado, Termo
+from detector_falacias import DetectorFalacias
+from motor_inferencia import MotorInferencia
 
 # Carrega o modelo de português
 nlp = spacy.load("pt_core_news_sm")
 
 app = Flask(__name__)
-
-class DetectorFalacias:
-    def __init__(self):
-        self.falacias_encontradas = []
-    
-    def detectar_ad_hominem(self, texto):
-        padroes = ["você é", "tu é", "seu argumento não vale porque", "não passa de um"]
-        for padrao in padroes:
-            if padrao in texto.lower():
-                return f"⚠️ Ad hominem: ataque à pessoa ('{padrao}')"
-        return None
-    
-    def detectar_apelo_autoridade(self, texto):
-        padroes = ["segundo", "como disse", "de acordo com", "é sabido por todos que"]
-        autoridades = ["pastor", "padre", "celebridade", "famoso", "especialista", "doutor", "professor"]
-        for padrao in padroes:
-            if padrao in texto.lower():
-                for autoridade in autoridades:
-                    if autoridade in texto.lower():
-                        return f"⚠️ Apelo à autoridade: '{padrao} {autoridade}'"
-        return None
-    
-    def detectar_falsa_dicotomia(self, texto):
-        padroes = ["ou você", "ou isto ou aquilo", "só há duas opções", "se não é A, é B"]
-        for padrao in padroes:
-            if padrao in texto.lower():
-                return f"⚠️ Falsa dicotomia: '{padrao}' (ignora outras possibilidades)"
-        return None
-    
-    def detectar_circular(self, argumentos):
-        if len(argumentos) >= 2:
-            if str(argumentos[0]) == str(argumentos[-1]):
-                return "⚠️ Raciocínio circular: conclusão igual a premissa"
-        return None
-    
-    def analisar(self, texto, argumentos=None):
-        self.falacias_encontradas = []
-        detectors = [self.detectar_ad_hominem, self.detectar_apelo_autoridade, self.detectar_falsa_dicotomia]
-        for detector in detectors:
-            resultado = detector(texto)
-            if resultado:
-                self.falacias_encontradas.append(resultado)
-        if argumentos:
-            resultado = self.detectar_circular(argumentos)
-            if resultado:
-                self.falacias_encontradas.append(resultado)
-        return self.falacias_encontradas
-
-class MotorInferencia:
-    def __init__(self):
-        self.premissas = []
-        self.conclusoes = []
-        self.regras_aplicadas = []
-        self.detector = DetectorFalacias()
-    
-    def adicionar_premissa(self, premissa):
-        if isinstance(premissa, str):
-            estrutura = extrair_estrutura(premissa)
-            if estrutura:
-                self.premissas.append(estrutura)
-                return True
-            return False
-        else:
-            self.premissas.append(premissa)
-            return True
-    
-    def modus_ponens(self, implicacao, fato):
-        if not isinstance(implicacao, (QuantificadorUniversal, QuantificadorNegacao)) or not isinstance(fato, Fato):
-            return None
-        if isinstance(implicacao, QuantificadorUniversal):
-            condicao_nome = implicacao.condicao.nome
-            fato_nome = str(fato.predicado).split('(')[0]
-            fato_arg = fato.sujeito
-            if condicao_nome == fato_nome or condicao_nome in str(fato.predicado):
-                conclusao_nome = implicacao.propriedade.nome
-                if conclusao_nome.startswith('¬'):
-                    conclusao_nome = conclusao_nome[1:]
-                return Fato(fato_arg, Predicado(conclusao_nome, fato_arg))
-        return None
-    
-    def silogismo_hipotetico(self, imp1, imp2):
-        if not isinstance(imp1, QuantificadorUniversal) or not isinstance(imp2, QuantificadorUniversal):
-            return None
-        if imp1.propriedade.nome == imp2.condicao.nome:
-            nova_condicao = Predicado(imp1.condicao.nome, Termo("x"))
-            nova_propriedade = Predicado(imp2.propriedade.nome, Termo("x"))
-            return QuantificadorUniversal("x", nova_condicao, nova_propriedade)
-        return None
-    
-    def resolver(self):
-        novas = []
-        for p1 in self.premissas:
-            for p2 in self.premissas:
-                if p1 != p2:
-                    for res in [self.modus_ponens(p1, p2), self.modus_ponens(p2, p1), self.silogismo_hipotetico(p1, p2)]:
-                        if res and not any(str(r) == str(res) for r in self.premissas + novas):
-                            novas.append(res)
-        for n in novas:
-            if not any(str(p) == str(n) for p in self.premissas):
-                self.premissas.append(n)
-                self.conclusoes.append(n)
-        return novas
 
 @app.route('/')
 def index():
@@ -504,7 +404,7 @@ def index():
                     <p>IA Simbólica · Lógica de Primeira Ordem · Detecção de Falácias</p>
                 </div>
                 <div class="badge">
-                    <span>v2.0</span> · Python + Flask + spaCy
+                    <span>v3.0</span> · Python + Flask + spaCy
                 </div>
             </div>
             
@@ -588,6 +488,13 @@ def index():
                     <a onclick="carregarExemploEspecifico('autoridade')">Apelo à Autoridade</a>
                     <a onclick="carregarExemploEspecifico('negacao')">Negação</a>
                     <a onclick="carregarExemploEspecifico('silogismo')">Silogismo</a>
+                    <a onclick="carregarExemploEspecifico('seu_exemplo')">Seu Exemplo</a>
+                    <a onclick="carregarExemploEspecifico('conjuncao')">Conjunção</a>
+                    <a onclick="carregarExemploEspecifico('disjuncao')">Disjunção</a>
+                    <a onclick="carregarExemploEspecifico('implicacao')">Implicação</a>
+                    <a onclick="carregarExemploEspecifico('existencial')">Existencial</a>
+                    <a onclick="carregarExemploEspecifico('falso_consenso')">Falso Consenso</a>
+                    <a onclick="carregarExemploEspecifico('espantalho')">Espantalho</a>
                 </div>
             </div>
         </div>
@@ -678,7 +585,14 @@ def index():
                     'ad': 'Você é ignorante. Portanto, seu argumento está errado.',
                     'autoridade': 'Segundo um famoso pastor, a terra é plana. Portanto, a terra é plana.',
                     'negacao': 'Nenhum homem é pássaro. Sócrates é homem. Sócrates não é pássaro.',
-                    'silogismo': 'Todo mamífero é animal. Todo gato é mamífero. Totó é gato. Totó é animal.'
+                    'silogismo': 'Todo mamífero é animal. Todo gato é mamífero. Totó é gato. Totó é animal.',
+                    'seu_exemplo': 'Você não pode falar sobre mudanças climáticas porque você não é um cientista.',
+                    'conjuncao': 'Deus existe e é bom.',
+                    'disjuncao': 'O time vence ou empata.',
+                    'implicacao': 'Se chover, então a rua fica molhada.',
+                    'existencial': 'Existe um homem que é mortal.',
+                    'falso_consenso': 'Todo mundo sabe que a terra é plana.',
+                    'espantalho': 'Você está dizendo que Deus não existe, então você é ateu.'
                 };
                 document.getElementById('texto').value = exemplos[tipo] || exemplos['silogismo'];
                 updateCharCount();
@@ -705,10 +619,7 @@ def analisar():
     for frase in frases:
         estrutura = extrair_estrutura(frase)
         if estrutura:
-            if hasattr(estrutura, 'negado') and estrutura.negado:
-                estruturas.append(f"{frase} → ¬{str(estrutura.predicado)}")
-            else:
-                estruturas.append(f"{frase} → {estrutura}")
+            estruturas.append(f"{frase} → {estrutura}")
             argumentos.append(estrutura)
         else:
             estruturas.append(f"{frase} → (sem estrutura clara)")
@@ -734,6 +645,5 @@ def analisar():
 
 if __name__ == '__main__':
     import os
-    port = int(os.environ.get('PORT', 10000))
-    print(f"🚀 Iniciando servidor na porta {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
