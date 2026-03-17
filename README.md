@@ -6,7 +6,7 @@
 [![Flask](https://img.shields.io/badge/Flask-2.3.x-green.svg)](https://flask.palletsprojects.com/)
 [![spaCy](https://img.shields.io/badge/spaCy-3.7.x-yellow.svg)](https://spacy.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
-[![Live Demo](https://img.shields.io/badge/demo-online-brightgreen.svg)](https://analisador-paradoxos.onrender.com) <!-- Substitua pela URL real -->
+[![Live Demo](https://img.shields.io/badge/demo-online-brightgreen.svg)](https://analisador-paradoxos.onrender.com)
 
 O **Analisador de Paradoxos** é uma ferramenta de IA simbólica que analisa argumentos em português, convertendo‑os em estruturas de lógica de primeira ordem, detectando falácias comuns e deduzindo conclusões por meio de regras de inferência. O sistema é composto por um parser linguístico, um motor de inferência e uma interface web interativa.
 
@@ -66,7 +66,7 @@ O **Analisador de Paradoxos** é uma ferramenta de IA simbólica que analisa arg
 - **spaCy** – processamento de linguagem natural (modelo `pt_core_news_sm`)
 - **Gunicorn** – servidor WSGI para produção
 - **Unittest** – testes automatizados
-- **Render** – plataforma de deploy (opcional)
+- **Render** – plataforma de deploy
 
 ---
 
@@ -74,5 +74,5 @@ O **Analisador de Paradoxos** é uma ferramenta de IA simbólica que analisa arg
 
 1. **Clone o repositório**
    ```bash
-   git clone https://github.com/seu-usuario/analisador-paradoxos.git
+   git clone https://github.com/rafaelsoaresgw/analisador-paradoxos.git
    cd analisador-paradoxos
