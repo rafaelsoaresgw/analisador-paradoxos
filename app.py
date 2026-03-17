@@ -480,6 +480,12 @@ def index():
                     </div>
                 </div>
             </div>
+
+            <!-- ===== NOVO: ÁREA DE ESTATÍSTICAS ===== -->
+            <div class="stats-footer" style="text-align: center; margin-top: 20px; color: var(--text-secondary);">
+                <span id="frasesAnalisadas">0 frases analisadas</span> |
+                <span id="falaciasEncontradas">0 falácias encontradas</span>
+            </div>
             
             <div class="footer">
                 <div>🧠 Analisador de Paradoxos · IA Simbólica</div>
@@ -558,6 +564,10 @@ def index():
                     } else {
                         conclusoesDiv.innerHTML = '<div class="empty-state"><div class="emoji">⚙️</div><div>Nenhuma conclusão deduzida</div></div>';
                     }
+
+                    // ===== ATUALIZA AS ESTATÍSTICAS =====
+                    document.getElementById('frasesAnalisadas').innerText = data.estruturas.length + ' frases analisadas';
+                    document.getElementById('falaciasEncontradas').innerText = data.falacias.length + ' falácias encontradas';
                 })
                 .catch(error => {
                     document.getElementById('loading').style.display = 'none';
@@ -571,6 +581,9 @@ def index():
                 document.getElementById('logicas').innerHTML = '<div class="empty-state"><div class="emoji">🔍</div><div>Nenhum texto analisado</div><div style="font-size:0.8rem; margin-top:10px">Digite um argumento e clique em Analisar</div></div>';
                 document.getElementById('falacias').innerHTML = '<div class="empty-state"><div class="emoji">✨</div><div>Nenhuma falácia detectada</div></div>';
                 document.getElementById('conclusoes').innerHTML = '<div class="empty-state"><div class="emoji">⚙️</div><div>Nenhuma conclusão deduzida</div></div>';
+                // Zera também as estatísticas
+                document.getElementById('frasesAnalisadas').innerText = '0 frases analisadas';
+                document.getElementById('falaciasEncontradas').innerText = '0 falácias encontradas';
             }
             
             function carregarExemplo() {
@@ -625,7 +638,7 @@ def analisar():
             estruturas.append(f"{frase} → (sem estrutura clara)")
     
     detector = DetectorFalacias()
-    falacias = detector.analisar(texto, argumentos)
+    falacias = detector.analisar(texto, argumentos, frases=frases)
     
     conclusoes = []
     if argumentos:
